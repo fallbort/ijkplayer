@@ -458,6 +458,8 @@ static int ikjmp_chkst_start_l(int mp_state)
 static int ijkmp_start_l(IjkMediaPlayer *mp)
 {
     assert(mp);
+    
+    av_log(NULL, AV_LOG_DEBUG, "[Belle][ijkmp_start_l]\n");
 
     MP_RET_IF_FAILED(ikjmp_chkst_start_l(mp->mp_state));
 

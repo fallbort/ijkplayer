@@ -255,8 +255,9 @@ void IJKFFIOStatCompleteRegister(void (*cb)(const char *url,
 #ifdef DEBUG
         [IJKFFMoviePlayerController setLogLevel:k_IJK_LOG_DEBUG];
 #else
-        [IJKFFMoviePlayerController setLogLevel:k_IJK_LOG_SILENT];
+        [IJKFFMoviePlayerController setLogLevel:k_IJK_LOG_DEBUG];
 #endif
+        
         // init audio sink
         [[IJKAudioKit sharedInstance] setupAudioSession];
 

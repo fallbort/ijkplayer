@@ -344,6 +344,7 @@ static int packet_queue_get_or_buffering(FFPlayer *ffp, PacketQueue *q, AVPacket
             return -1;
         else if (new_packet == 0) {
             if (q->is_buffer_indicator && !*finished)
+                av_log(NULL, AV_LOG_DEBUG, "[Belle][packet_queue_get_or_buffering] is_buffer_indicator = true, ffp_toggle_buffering(ffp, 1);\n");
                 ffp_toggle_buffering(ffp, 1);
             new_packet = packet_queue_get(q, pkt, 1, serial);
             if (new_packet < 0)
@@ -541,6 +542,7 @@ static int decoder_decode_frame(FFPlayer *ffp, Decoder *d, AVFrame *frame, AVSub
 
         switch (d->avctx->codec_type) {
             case AVMEDIA_TYPE_VIDEO: {
+                av_log(NULL, AV_LOG_DEBUG, "[Belle][decoder_decode_frame] \n");
                 ret = avcodec_decode_video2(d->avctx, frame, &got_frame, &d->pkt_temp);
                 if (got_frame) {
                     ffp->stat.vdps = SDL_SpeedSamplerAdd(&ffp->vdps_sampler, FFP_SHOW_VDPS_AVCODEC, "vdps[avcodec]");
@@ -612,6 +614,9 @@ static void frame_queue_unref_item(Frame *vp)
 
 static int frame_queue_init(FrameQueue *f, PacketQueue *pktq, int max_size, int keep_last)
 {
+    if (max_size == 3) {
+        av_log(NULL, AV_LOG_DEBUG, "[Belle][frame_queue_init] max_size = %d, keep_last = %d\n", max_size, keep_last);
+    }
     int i;
     memset(f, 0, sizeof(FrameQueue));
     if (!(f->mutex = SDL_CreateMutex())) {
@@ -653,11 +658,19 @@ static void frame_queue_signal(FrameQueue *f)
 
 static Frame *frame_queue_peek(FrameQueue *f)
 {
+    if (f->max_size == 3) {
+        av_log(NULL, AV_LOG_DEBUG, "[Belle][frame_queue_peek] index = %d\n", (f->rindex + f->rindex_shown) % f->max_size);
+    }
+    
     return &f->queue[(f->rindex + f->rindex_shown) % f->max_size];
 }
 
 static Frame *frame_queue_peek_next(FrameQueue *f)
 {
+    if (f->max_size == 3) {
+        av_log(NULL, AV_LOG_DEBUG, "[Belle][frame_queue_peek_next] index = %d\n", (f->rindex + f->rindex_shown + 1) % f->max_size);
+    }
+    
     return &f->queue[(f->rindex + f->rindex_shown + 1) % f->max_size];
 }
 
@@ -672,6 +685,10 @@ static Frame *frame_queue_peek_writable(FrameQueue *f)
     SDL_LockMutex(f->mutex);
     while (f->size >= f->max_size &&
            !f->pktq->abort_request) {
+        if (f->max_size == 3) {
+            av_log(NULL, AV_LOG_DEBUG, "[Belle][frame_queue_peek_writable]  wait until we have space to put a new frame, size = %d, rindex_shown = %d\n", f->size, f->rindex_shown);
+        }
+        
         SDL_CondWait(f->cond, f->mutex);
     }
     SDL_UnlockMutex(f->mutex);
@@ -679,6 +696,10 @@ static Frame *frame_queue_peek_writable(FrameQueue *f)
     if (f->pktq->abort_request)
         return NULL;
 
+    if (f->max_size == 3) {
+        av_log(NULL, AV_LOG_DEBUG, "[Belle][frame_queue_peek_writable] return frame, windex = %d\n", f->windex);
+    }
+    
     return &f->queue[f->windex];
 }
 
@@ -688,6 +709,9 @@ static Frame *frame_queue_peek_readable(FrameQueue *f)
     SDL_LockMutex(f->mutex);
     while (f->size - f->rindex_shown <= 0 &&
            !f->pktq->abort_request) {
+        if (f->max_size == 3) {
+            av_log(NULL, AV_LOG_DEBUG, "[Belle][frame_queue_peek_readable] wait until we have a readable a new frame, size = %d, rindex_shown = %d\n", f->size, f->rindex_shown);
+        }
         SDL_CondWait(f->cond, f->mutex);
     }
     SDL_UnlockMutex(f->mutex);
@@ -695,21 +719,36 @@ static Frame *frame_queue_peek_readable(FrameQueue *f)
     if (f->pktq->abort_request)
         return NULL;
 
+    if (f->max_size == 3) {
+        av_log(NULL, AV_LOG_DEBUG, "[Belle][frame_queue_peek_readable] return frame, rindex = %d, rindex_shown = %d, index = %d\n", f->rindex, f->rindex_shown, (f->rindex + f->rindex_shown) % f->max_size);
+    }
+    
     return &f->queue[(f->rindex + f->rindex_shown) % f->max_size];
 }
 
 static void frame_queue_push(FrameQueue *f)
 {
+    if (f->max_size == 3) {
+        av_log(NULL, AV_LOG_DEBUG, "[Belle][frame_queue_push] start, size = %d, windex = %d, max_size = %d\n", f->size, f->windex, f->max_size);
+    }
+    
     if (++f->windex == f->max_size)
         f->windex = 0;
     SDL_LockMutex(f->mutex);
     f->size++;
     SDL_CondSignal(f->cond);
     SDL_UnlockMutex(f->mutex);
+    if (f->max_size == 3) {
+        av_log(NULL, AV_LOG_DEBUG, "[Belle][frame_queue_push] finished, size = %d, windex = %d, max_size = %d\n", f->size, f->windex, f->max_size);
+    }
 }
 
 static void frame_queue_next(FrameQueue *f)
 {
+    if (f->max_size == 3) {
+        av_log(NULL, AV_LOG_DEBUG, "[Belle][frame_queue_next] start, size = %d, rindex_shown = %d, rindex = %d, max_size = %d\n", f->size, f->rindex_shown, f->rindex, f->max_size);
+    }
+    
     if (f->keep_last && !f->rindex_shown) {
         f->rindex_shown = 1;
         return;
@@ -721,11 +760,19 @@ static void frame_queue_next(FrameQueue *f)
     f->size--;
     SDL_CondSignal(f->cond);
     SDL_UnlockMutex(f->mutex);
+    if (f->max_size == 3) {
+        av_log(NULL, AV_LOG_DEBUG, "[Belle][frame_queue_next] finished, size = %d, rindex_shown = %d, rindex = %d, max_size = %d\n", f->size, f->rindex_shown, f->rindex, f->max_size);
+    }
+    
 }
 
 /* return the number of undisplayed frames in the queue */
 static int frame_queue_nb_remaining(FrameQueue *f)
 {
+    if (f->max_size == 3) {
+        av_log(NULL, AV_LOG_DEBUG, "[Belle][frame_queue_nb_remaining] size = %d, rindex_shown = %d, remaining = %d, max_size = %d\n", f->size, f->rindex_shown, f->size - f->rindex_shown, f->max_size);
+    }
+    
     return f->size - f->rindex_shown;
 }
 
@@ -990,6 +1037,7 @@ static void stream_close(FFPlayer *ffp)
 /* display the current picture, if any */
 static void video_display2(FFPlayer *ffp)
 {
+    av_log(NULL, AV_LOG_DEBUG, "[Belle][video_display2] display the current picture, if any\n");
     VideoState *is = ffp->is;
     if (is->video_st)
         video_image_display2(ffp);
@@ -1130,9 +1178,12 @@ static void stream_toggle_pause_l(FFPlayer *ffp, int pause_on)
 static void stream_update_pause_l(FFPlayer *ffp)
 {
     VideoState *is = ffp->is;
+    av_log(NULL, AV_LOG_DEBUG, "[Belle][stream_update_pause_l] step = %d, pause_req = %d, buffering_on = %d\n", is->step, is->pause_req, is->buffering_on);
     if (!is->step && (is->pause_req || is->buffering_on)) {
+        av_log(NULL, AV_LOG_DEBUG, "[Belle][stream_update_pause_l] stream_toggle_pause_l(ffp, 1);\n");
         stream_toggle_pause_l(ffp, 1);
     } else {
+        av_log(NULL, AV_LOG_DEBUG, "[Belle][stream_update_pause_l] stream_toggle_pause_l(ffp, 0);\n");
         stream_toggle_pause_l(ffp, 0);
     }
 }
@@ -1142,6 +1193,7 @@ static void toggle_pause_l(FFPlayer *ffp, int pause_on)
     VideoState *is = ffp->is;
     is->pause_req = pause_on;
     ffp->auto_resume = !pause_on;
+    av_log(NULL, AV_LOG_DEBUG, "[Belle][toggle_pause_l] pause_on = %d, stream_update_pause_l(ffp);\n", pause_on);
     stream_update_pause_l(ffp);
     is->step = 0;
 }
@@ -1235,6 +1287,7 @@ static void video_refresh(FFPlayer *opaque, double *remaining_time)
     if (!ffp->display_disable && is->show_mode != SHOW_MODE_VIDEO && is->audio_st) {
         time = av_gettime_relative() / 1000000.0;
         if (is->force_refresh || is->last_vis_time + ffp->rdftspeed < time) {
+            av_log(NULL, AV_LOG_DEBUG, "[Belle][video_refresh] remaining_time = %d, video_display2(ffp);\n", remaining_time);
             video_display2(ffp);
             is->last_vis_time = time;
         }
@@ -1324,6 +1377,7 @@ retry:
             if (is->step) {
                 is->step = 0;
                 if (!is->paused)
+                    av_log(NULL, AV_LOG_DEBUG, "[Belle][video_refresh] stream_update_pause_l(ffp);\n");
                     stream_update_pause_l(ffp);
             }
             SDL_UnlockMutex(ffp->is->play_mutex);
@@ -1389,8 +1443,8 @@ static void alloc_picture(FFPlayer *ffp, int frame_format)
     int sdl_format;
 #endif
 
+    av_log(NULL, AV_LOG_DEBUG, "[Belle][alloc_picture] pictq.windex = %d, pictq.size = %d\n", is->pictq.windex, is->pictq.size);
     vp = &is->pictq.queue[is->pictq.windex];
-
     free_picture(vp);
 
 #ifdef FFP_MERGE
@@ -1429,6 +1483,7 @@ static void alloc_picture(FFPlayer *ffp, int frame_format)
 
 static int queue_picture(FFPlayer *ffp, AVFrame *src_frame, double pts, double duration, int64_t pos, int serial)
 {
+    av_log(NULL, AV_LOG_DEBUG, "[Belle][queue_picture]\n");
     VideoState *is = ffp->is;
     Frame *vp;
     int video_accurate_seek_fail = 0;
@@ -2045,6 +2100,7 @@ static int ffplay_video_thread(void *arg)
     }
 
     for (;;) {
+        av_log(NULL, AV_LOG_DEBUG, "[Belle][ffplay_video_thread] get_video_frame(ffp, frame);\n");
         ret = get_video_frame(ffp, frame);
         if (ret < 0)
             goto the_end;
@@ -2815,6 +2871,7 @@ static int decode_interrupt_cb(void *ctx)
 }
 
 static int stream_has_enough_packets(AVStream *st, int stream_id, PacketQueue *queue, int min_frames) {
+    
     return stream_id < 0 ||
            queue->abort_request ||
            (st->disposition & AV_DISPOSITION_ATTACHED_PIC) ||
@@ -3143,7 +3200,8 @@ static int read_thread(void *arg)
             int64_t seek_max    = is->seek_rel < 0 ? seek_target - is->seek_rel - 2: INT64_MAX;
 // FIXME the +-2 is due to rounding being not done in the correct direction in generation
 //      of the seek_pos/seek_rel variables
-
+            
+            av_log(NULL, AV_LOG_DEBUG, "[Belle][read_thread] is->seek_req, ffp_toggle_buffering(ffp, 1);\n");
             ffp_toggle_buffering(ffp, 1);
             ffp_notify_msg3(ffp, FFP_MSG_BUFFERING_UPDATE, 0, 0);
             ret = avformat_seek_file(is->ic, -1, seek_min, seek_target, seek_max, is->seek_flags);
@@ -3163,8 +3221,11 @@ static int read_thread(void *arg)
                     if (ffp->node_vdec) {
                         ffpipenode_flush(ffp->node_vdec);
                     }
+                    av_log(NULL, AV_LOG_DEBUG, "[Belle][read_thread] packet_queue_flush(&is->videoq);\n");
                     packet_queue_flush(&is->videoq);
+                    av_log(NULL, AV_LOG_DEBUG, "[Belle][read_thread] flush_pkt = %d, packet_queue_put(&is->videoq, &flush_pkt);\n", flush_pkt);
                     packet_queue_put(&is->videoq, &flush_pkt);
+                    av_log(NULL, AV_LOG_DEBUG, "[Belle][read_thread] packet_queue_put finished, videoq.nb_packets = %d\n", is->videoq.nb_packets);
                 }
                 if (is->seek_flags & AVSEEK_FLAG_BYTE) {
                    set_clock(&is->extclk, NAN, 0);
@@ -3190,6 +3251,7 @@ static int read_thread(void *arg)
                 if (ffp->packet_buffering)
                     is->buffering_on = 1;
                 ffp->auto_resume = 0;
+                av_log(NULL, AV_LOG_DEBUG, "[Belle][read_thread] seek_req && auto_resume, stream_update_pause_l(ffp);\n");
                 stream_update_pause_l(ffp);
             }
             if (is->pause_req)
@@ -3231,6 +3293,8 @@ static int read_thread(void *arg)
             || (   stream_has_enough_packets(is->audio_st, is->audio_stream, &is->audioq, MIN_FRAMES)
                 && stream_has_enough_packets(is->video_st, is->video_stream, &is->videoq, MIN_FRAMES)
                 && stream_has_enough_packets(is->subtitle_st, is->subtitle_stream, &is->subtitleq, MIN_FRAMES)))) {
+            av_log(NULL, AV_LOG_DEBUG, "[Belle][stream_has_enough_packets] &is->videoq->nb_packets = %d\n", &is->videoq.nb_packets);
+            av_log(NULL, AV_LOG_DEBUG, "[Belle][read_thread] if the queue are full, no need to read more\n");
             if (!is->eof) {
                 ffp_toggle_buffering(ffp, 0);
             }
@@ -3264,6 +3328,8 @@ static int read_thread(void *arg)
                     ffp->auto_resume = 0;
 
                     // TODO: 0 it's a bit early to notify complete here
+                    av_log(NULL, AV_LOG_DEBUG, "[Belle][read_thread] frame_queue_nb_remaining(&is->pictq) = %d\n", frame_queue_nb_remaining(&is->pictq));
+                    av_log(NULL, AV_LOG_DEBUG, "[Belle][read_thread] ffp_toggle_buffering(ffp, 0);\n");
                     ffp_toggle_buffering(ffp, 0);
                     toggle_pause(ffp, 1);
                     if (ffp->error) {
@@ -3278,6 +3344,7 @@ static int read_thread(void *arg)
         }
         pkt->flags = 0;
         ret = av_read_frame(ic, pkt);
+//            av_log(NULL, AV_LOG_DEBUG, "[Belle][read_thread] av_read_frame(ic, pkt), pkt->size = %d, ret = %d\n", pkt->size, ret);
         if (ret < 0) {
             int pb_eof = 0;
             int pb_error = 0;
@@ -3323,6 +3390,8 @@ static int read_thread(void *arg)
                 ffp->error = 0;
             }
             if (is->eof) {
+                av_log(NULL, AV_LOG_DEBUG, "[Belle][read_thread] is->eof = true\n");
+                av_log(NULL, AV_LOG_DEBUG, "[Belle][read_thread] ffp_toggle_buffering(ffp, 0);\n");
                 ffp_toggle_buffering(ffp, 0);
                 SDL_Delay(100);
             }
@@ -3342,6 +3411,7 @@ static int read_thread(void *arg)
                 packet_queue_put(&is->subtitleq, &flush_pkt);
             }
             if (is->video_stream >= 0) {
+                av_log(NULL, AV_LOG_DEBUG, "[Belle][read_thread] packet_queue_put(&is->videoq, &flush_pkt), videoq.nb_packets = %d\n", is->videoq.nb_packets);
                 packet_queue_put(&is->videoq, &flush_pkt);
             }
         }
@@ -3374,6 +3444,7 @@ static int read_thread(void *arg)
             packet_queue_put(&is->audioq, pkt);
         } else if (pkt->stream_index == is->video_stream && pkt_in_play_range
                    && !(is->video_st && (is->video_st->disposition & AV_DISPOSITION_ATTACHED_PIC))) {
+            av_log(NULL, AV_LOG_DEBUG, "[Belle][read_thread] packet_queue_put(&is->videoq, pkt), videoq.nb_packets = %d\n", is->videoq.nb_packets);
             packet_queue_put(&is->videoq, pkt);
         } else if (pkt->stream_index == is->subtitle_stream && pkt_in_play_range) {
             packet_queue_put(&is->subtitleq, pkt);
@@ -3385,13 +3456,17 @@ static int read_thread(void *arg)
                 
         if (ffp->packet_buffering) {
             io_tick_counter = SDL_GetTickHR();
+//            av_log(NULL, AV_LOG_DEBUG, "[Belle][read_thread] io_tick_counter = %d\n", io_tick_counter);
+//            av_log(NULL, AV_LOG_DEBUG, "[Belle][read_thread] prev_io_tick_counter = %d\n", prev_io_tick_counter);
             if (!ffp->first_video_frame_rendered) {
                 if (abs((int)(io_tick_counter - prev_io_tick_counter)) > FAST_BUFFERING_CHECK_PER_MILLISECONDS) {
+                    av_log(NULL, AV_LOG_DEBUG, "[Belle][read_thread] ffp->first_video_frame_rendered = false\n");
                     prev_io_tick_counter = io_tick_counter;
                     ffp_check_buffering_l(ffp);
                 }
             } else {
                 if (abs((int)(io_tick_counter - prev_io_tick_counter)) > BUFFERING_CHECK_PER_MILLISECONDS) {
+                    av_log(NULL, AV_LOG_DEBUG, "[Belle][read_thread] ffp->first_video_frame_rendered = true\n");
                     prev_io_tick_counter = io_tick_counter;
                     ffp_check_buffering_l(ffp);
                 }
@@ -4087,6 +4162,7 @@ int ffp_start_from_l(FFPlayer *ffp, long msec)
         return EIJK_NULL_IS_PTR;
 
     ffp->auto_resume = 1;
+    av_log(NULL, AV_LOG_DEBUG, "[Belle][ffp_start_from_l] ffp_toggle_buffering(ffp, 1);\n");
     ffp_toggle_buffering(ffp, 1);
     ffp_seek_to_l(ffp, msec);
     return 0;
@@ -4307,6 +4383,7 @@ Frame *ffp_frame_queue_peek_writable(FrameQueue *f)
 
 void ffp_frame_queue_push(FrameQueue *f)
 {
+    av_log(NULL, AV_LOG_DEBUG, "[Belle][ffp_frame_queue_push]\n");
     return frame_queue_push(f);
 }
 
@@ -4346,6 +4423,7 @@ void ffp_toggle_buffering_l(FFPlayer *ffp, int buffering_on)
 
 void ffp_toggle_buffering(FFPlayer *ffp, int start_buffering)
 {
+    av_log(NULL, AV_LOG_DEBUG, "[Belle][ffp_toggle_buffering] start, start_buffering = %d\n", start_buffering);
     SDL_LockMutex(ffp->is->play_mutex);
     ffp_toggle_buffering_l(ffp, start_buffering);
     SDL_UnlockMutex(ffp->is->play_mutex);
@@ -4385,6 +4463,7 @@ void ffp_statistic_l(FFPlayer *ffp)
 
 void ffp_check_buffering_l(FFPlayer *ffp)
 {
+    av_log(ffp, AV_LOG_DEBUG, "[Belle][ffp_check_buffering_l] start\n");
     VideoState *is            = ffp->is;
     int hwm_in_ms             = ffp->dcc.current_high_water_mark_in_ms; // use fast water mark for first loading
     int buf_size_percent      = -1;
@@ -4407,6 +4486,7 @@ void ffp_check_buffering_l(FFPlayer *ffp)
 
         if (is->audio_st && audio_time_base_valid) {
             audio_cached_duration = ffp->stat.audio_cache.duration;
+            av_log(NULL, AV_LOG_DEBUG, "[Belle][ffp_check_buffering_l] audio_cached_duration = %d\n", audio_cached_duration);
 #ifdef FFP_SHOW_DEMUX_CACHE
             int audio_cached_percent = (int)av_rescale(audio_cached_duration, 1005, hwm_in_ms * 10);
             av_log(ffp, AV_LOG_DEBUG, "audio cache=%%%d milli:(%d/%d) bytes:(%d/%d) packet:(%d/%d)\n", audio_cached_percent,
@@ -4418,6 +4498,7 @@ void ffp_check_buffering_l(FFPlayer *ffp)
 
         if (is->video_st && video_time_base_valid) {
             video_cached_duration = ffp->stat.video_cache.duration;
+            av_log(NULL, AV_LOG_DEBUG, "[Belle][ffp_check_buffering_l] video_cached_duration = %d\n", video_cached_duration);
 #ifdef FFP_SHOW_DEMUX_CACHE
             int video_cached_percent = (int)av_rescale(video_cached_duration, 1005, hwm_in_ms * 10);
             av_log(ffp, AV_LOG_DEBUG, "video cache=%%%d milli:(%d/%d) bytes:(%d/%d) packet:(%d/%d)\n", video_cached_percent,
@@ -4440,6 +4521,7 @@ void ffp_check_buffering_l(FFPlayer *ffp)
             ffp->playable_duration_ms = buf_time_position;
 
             buf_time_percent = (int)av_rescale(cached_duration_in_ms, 1005, hwm_in_ms * 10);
+            av_log(NULL, AV_LOG_DEBUG, "[Belle][ffp_check_buffering_l] buf_time_percent = %d * 1005 / (%d * 10) = %d\n", cached_duration_in_ms, hwm_in_ms, buf_time_percent);
 #ifdef FFP_SHOW_DEMUX_CACHE
             av_log(ffp, AV_LOG_DEBUG, "time cache=%%%d (%d/%d)\n", buf_time_percent, cached_duration_in_ms, hwm_in_ms);
 #endif
@@ -4471,6 +4553,9 @@ void ffp_check_buffering_l(FFPlayer *ffp)
             need_start_buffering = 1;
         buf_percent = buf_size_percent;
     }
+    
+    av_log(NULL, AV_LOG_DEBUG, "[Belle][ffp_check_buffering_l] buf_time_percent = %d\n", buf_time_percent);
+    av_log(NULL, AV_LOG_DEBUG, "[Belle][ffp_check_buffering_l] buf_size_percent = %d\n", buf_size_percent);
 
     if (buf_time_percent >= 0 && buf_size_percent >= 0) {
         buf_percent = FFMIN(buf_time_percent, buf_size_percent);
@@ -4483,6 +4568,7 @@ void ffp_check_buffering_l(FFPlayer *ffp)
     }
 
     if (need_start_buffering) {
+        av_log(NULL, AV_LOG_DEBUG, "[Belle][ffp_check_buffering_l] need_start_buffering = true, hwm_in_ms = %d\n", hwm_in_ms);
         if (hwm_in_ms < ffp->dcc.next_high_water_mark_in_ms) {
             hwm_in_ms = ffp->dcc.next_high_water_mark_in_ms;
         } else {
@@ -4493,10 +4579,21 @@ void ffp_check_buffering_l(FFPlayer *ffp)
             hwm_in_ms = ffp->dcc.last_high_water_mark_in_ms;
 
         ffp->dcc.current_high_water_mark_in_ms = hwm_in_ms;
-
+        av_log(NULL, AV_LOG_DEBUG, "[Belle][ffp_check_buffering_l] ffp->dcc.current_high_water_mark_in_ms = hwm_in_ms = %d\n", hwm_in_ms);
+        
+        av_log(NULL, AV_LOG_DEBUG, "[Belle][ffp_check_buffering_l] is->buffer_indicator_queue->nb_packets = %d\n", is->buffer_indicator_queue->nb_packets);
+        av_log(NULL, AV_LOG_DEBUG, "[Belle][ffp_check_buffering_l] is->audioq.nb_packets = %d\n", is->audioq.nb_packets);
+        av_log(NULL, AV_LOG_DEBUG, "[Belle][ffp_check_buffering_l] is->videoq.nb_packets = %d\n", is->videoq.nb_packets);
+        av_log(NULL, AV_LOG_DEBUG, "[Belle][ffp_check_buffering_l] is->audio_stream = %d\n", is->audio_stream);
+        av_log(NULL, AV_LOG_DEBUG, "[Belle][ffp_check_buffering_l] is->video_stream = %d\n", is->video_stream);
+        av_log(NULL, AV_LOG_DEBUG, "[Belle][ffp_check_buffering_l] is->audioq.abort_request = %d\n", is->audioq.abort_request);
+        av_log(NULL, AV_LOG_DEBUG, "[Belle][ffp_check_buffering_l] is->videoq.abort_request = %d\n", is->videoq.abort_request);
+        
         if (is->buffer_indicator_queue && is->buffer_indicator_queue->nb_packets > 0) {
+            
             if (   (is->audioq.nb_packets > MIN_MIN_FRAMES || is->audio_stream < 0 || is->audioq.abort_request)
                 && (is->videoq.nb_packets > MIN_MIN_FRAMES || is->video_stream < 0 || is->videoq.abort_request)) {
+                av_log(NULL, AV_LOG_DEBUG, "[Belle][ffp_check_buffering_l] ffp_toggle_buffering(ffp, 0);\n");
                 ffp_toggle_buffering(ffp, 0);
             }
         }
