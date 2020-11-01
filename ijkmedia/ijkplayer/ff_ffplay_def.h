@@ -411,6 +411,7 @@ typedef struct VideoState {
     SDL_mutex *accurate_seek_mutex;
     SDL_cond  *video_accurate_seek_cond;
     SDL_cond  *audio_accurate_seek_cond;
+    int max_cached_duration;
 } VideoState;
 
 /* options specified by the user */
