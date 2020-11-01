@@ -74,8 +74,8 @@
  * MAX:   ...
  */
 #define DEFAULT_FIRST_HIGH_WATER_MARK_IN_MS     (100)
-#define DEFAULT_NEXT_HIGH_WATER_MARK_IN_MS      (1 * 1000)
-#define DEFAULT_LAST_HIGH_WATER_MARK_IN_MS      (5 * 1000) // 17media for decrease Buffering times when playing.
+#define DEFAULT_NEXT_HIGH_WATER_MARK_IN_MS      (1 * 500)
+#define DEFAULT_LAST_HIGH_WATER_MARK_IN_MS      (4 * 500) // 17media for decrease Buffering times when playing.
 
 #define BUFFERING_CHECK_PER_BYTES               (512)
 #define BUFFERING_CHECK_PER_MILLISECONDS        (500)
