@@ -3079,6 +3079,7 @@ static void stat_bitrate(AVPacket* pkt,FFPlayer *ffp,AVFormatContext *ic) {
  static void drop_queue_until_pts(PacketQueue *q, int64_t drop_to_pts) {
      MyAVPacketList *pkt1 = NULL;
      int del_nb_packets = 0;
+     int skipCount = 0;
      for (;;) {
          pkt1 = q->first_pkt;
          if (!pkt1) {
@@ -3106,11 +3107,16 @@ static void stat_bitrate(AVPacket* pkt,FFPlayer *ffp,AVFormatContext *ic) {
          pkt1->next = q->recycle_pkt;
          q->recycle_pkt = pkt1;
  #endif
+         if (skipCount > 1) {
+             break;
+         }else{
+             skipCount ++ ;
+         }
      }
      av_log(NULL, AV_LOG_INFO, "233 del_nb_packets = %d.\n", del_nb_packets);
  }
 
- static void control_video_queue_duration(FFPlayer *ffp, VideoState *is) {
+ static bool control_video_queue_duration(FFPlayer *ffp, VideoState *is) {
      int time_base_valid = 0;
      int64_t cached_duration = -1;
      int nb_packets = 0;
@@ -3131,19 +3137,21 @@ static void stat_bitrate(AVPacket* pkt,FFPlayer *ffp,AVFormatContext *ic) {
              cached_duration = duration * av_q2d(is->video_st->time_base) * 1000;
          }
      }
-     
+     bool skipCount = false;
      if (cached_duration > is->max_cached_duration) {
          // drop
          av_log(NULL, AV_LOG_INFO, "233 video cached_duration = %lld, nb_packets = %d.\n", cached_duration, nb_packets);
          drop_to_pts = is->videoq.last_pkt->pkt.pts - (duration / 2);  // 这里删掉一半，你也可以自己修改，依据设置进来的max_cached_duration大小
          drop_queue_until_pts(&is->videoq, drop_to_pts);
+         skipCount = true;
      }
      
      //Unlock
      SDL_UnlockMutex(is->videoq.mutex);
+     return skipCount;
  }
 
- static void control_audio_queue_duration(FFPlayer *ffp, VideoState *is) {
+ static bool control_audio_queue_duration(FFPlayer *ffp, VideoState *is) {
      int time_base_valid = 0;
      int64_t cached_duration = -1;
      int nb_packets = 0;
@@ -3163,21 +3171,23 @@ static void stat_bitrate(AVPacket* pkt,FFPlayer *ffp,AVFormatContext *ic) {
              cached_duration = duration * av_q2d(is->audio_st->time_base) * 1000;
          }
      }
-     
+     bool skipCount = false;
      if (cached_duration > is->max_cached_duration) {
          // drop
          av_log(NULL, AV_LOG_INFO, "233 audio cached_duration = %lld, nb_packets = %d.\n", cached_duration, nb_packets);
-         drop_to_pts = is->audioq.last_pkt->pkt.pts - (duration / 2);
+         drop_to_pts = is->audioq.first_pkt->pkt.pts + 100;
          drop_queue_until_pts(&is->audioq, drop_to_pts);
+         skipCount = true;
      }
      
      //Unlock
      SDL_UnlockMutex(is->audioq.mutex);
+     return skipCount;
  }
 
  static void control_queue_duration(FFPlayer *ffp, VideoState *is) {
      if (is->max_cached_duration <= 0) {
-         return;
+         return false;
      }
      
      if (is->audio_st) {
@@ -3186,7 +3196,7 @@ static void stat_bitrate(AVPacket* pkt,FFPlayer *ffp,AVFormatContext *ic) {
      if (is->video_st) {
          return control_video_queue_duration(ffp, is);
      }
-     
+     return false;
  }
 
 /* this thread gets the stream from the disk or the network */
@@ -3493,7 +3503,7 @@ static int read_thread(void *arg)
     if (ffp->seek_at_start > 0) {
         ffp_seek_to_l(ffp, (long)(ffp->seek_at_start));
     }
-
+    int skipCount = 0;
     for (;;) {
         if (is->abort_request)
             break;
@@ -3516,8 +3526,15 @@ static int read_thread(void *arg)
             continue;
         }
 #endif
-        if (is->max_cached_duration > 0) {
-            control_queue_duration(ffp, is);
+        if (skipCount > 30) {
+            if (is->max_cached_duration > 0) {
+                bool skipped = control_queue_duration(ffp, is);
+                if(skipped == true) {
+                    skipCount = 1;
+                }
+            }
+        }else {
+            skipCount ++ ;
         }
         if (is->seek_req) {
             int64_t seek_target = is->seek_pos;
