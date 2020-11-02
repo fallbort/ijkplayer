@@ -1,6 +1,8 @@
 /*
- * Copyright (c) 2016 Bilibili
- * Copyright (c) 2016 Raymond Zheng <raymondzheng1412@gmail.com>
+ * IJKSDLGLViewProtocol.h
+ *
+ * Copyright (c) 2017 Bilibili
+ * Copyright (c) 2017 raymond <raymondzheng1412@gmail.com>
  *
  * This file is part of ijkPlayer.
  *
@@ -18,21 +20,31 @@
  * License along with ijkPlayer; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
-#ifndef IJKAVUTIL_IJKSTL_H
-#define IJKAVUTIL_IJKSTL_H
 
-#include <stdint.h>
+#ifndef IJKSDLGLViewProtocol_h
+#define IJKSDLGLViewProtocol_h
 
-void* ijk_map_create();
-void ijk_map_put(void *data, int64_t key, void *value);
-void* ijk_map_get(void *data, int64_t key);
-int ijk_map_remove(void *data, int64_t key);
-int ijk_map_size(void *data);
-int ijk_map_max_size(void *data);
-void* ijk_map_index_get(void *data, int index);
-void ijk_map_traversal_handle(void *data, void *parm, int (*enu)(void *parm, int64_t key, void *elem));
-int64_t ijk_map_get_min_key(void *data);
-void ijk_map_clear(void *data);
-void ijk_map_destroy(void *data);
+#import <UIKit/UIKit.h>
 
-#endif /* IJKAVUTIL_IJKSTL_H */
+typedef struct IJKOverlay IJKOverlay;
+struct IJKOverlay {
+    int w;
+    int h;
+    UInt32 format;
+    int planes;
+    UInt16 *pitches;
+    UInt8 **pixels;
+    int sar_num;
+    int sar_den;
+    CVPixelBufferRef pixel_buffer;
+};
+
+@protocol IJKSDLGLViewProtocol <NSObject>
+- (UIImage*) snapshot;
+@property(nonatomic, readonly) CGFloat  fps;
+@property(nonatomic)        CGFloat  scaleFactor;
+@property(nonatomic)        BOOL  isThirdGLView;
+- (void) display_pixels: (IJKOverlay *) overlay;
+@end
+
+#endif /* IJKSDLGLViewProtocol_h */
