@@ -2967,7 +2967,7 @@ static void stat_bitrate(AVPacket* pkt,FFPlayer *ffp,AVFormatContext *ic) {
      return skipCount;
  }
 
- static void control_queue_duration(FFPlayer *ffp, VideoState *is) {
+ static bool control_queue_duration(FFPlayer *ffp, VideoState *is) {
      if (is->max_cached_duration <= 0) {
          return false;
      }
