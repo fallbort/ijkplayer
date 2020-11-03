@@ -3511,7 +3511,7 @@ static int read_thread(void *arg)
         }
 #endif
         if (is->max_cached_duration > 0) {
-            int startPoint = 200;
+            int startPoint = 260;
             if (skipCount - startPoint > 30 && skipCount > startPoint) {
                 bool skipped = control_queue_duration(ffp, is);
                 if(skipped == true) {
