@@ -3089,10 +3089,9 @@ static int is_realtime(AVFormatContext *s)
          pkt1->next = q->recycle_pkt;
          q->recycle_pkt = pkt1;
  #endif
-         if (skipCount > 1) {
+         skipCount ++ ;
+         if (skipCount >= 1) {
              break;
-         }else{
-             skipCount ++ ;
          }
      }
      av_log(NULL, AV_LOG_INFO, "233 del_nb_packets = %d.\n", del_nb_packets);
@@ -3512,7 +3511,7 @@ static int read_thread(void *arg)
 #endif
         if (is->max_cached_duration > 0) {
             int startPoint = 260;
-            if (skipCount - startPoint > 30 && skipCount > startPoint) {
+            if (skipCount - startPoint > 15 && skipCount > startPoint) {
                 bool skipped = control_queue_duration(ffp, is);
                 if(skipped == true) {
                     skipCount = startPoint;
