@@ -3112,17 +3112,19 @@ static int read_thread(void *arg)
     }
 
 //    is->realtime = is_realtime(ic);
-    is->realtime = 0;
     AVDictionaryEntry *e = av_dict_get(ffp->player_opts, "max_cached_duration", NULL, 0);
     if (e) {
         int max_cached_duration = atoi(e->value);
         if (max_cached_duration <= 0) {
             is->max_cached_duration = 0;
+            is->realtime = is_realtime(ic);
         } else {
             is->max_cached_duration = max_cached_duration;
+            is->realtime = 0;
         }
     } else {
         is->max_cached_duration = 0;
+        is->realtime = is_realtime(ic);
     }
 
     if (true || ffp->show_status)
@@ -3274,17 +3276,18 @@ static int read_thread(void *arg)
             continue;
         }
 #endif
-        int startPoint = 200;
-        if (skipCount - startPoint > 30 && skipCount > startPoint) {
-            if (is->max_cached_duration > 0) {
+        if (is->max_cached_duration > 0) {
+            int startPoint = 200;
+            if (skipCount - startPoint > 30 && skipCount > startPoint) {
                 bool skipped = control_queue_duration(ffp, is);
                 if(skipped == true) {
                     skipCount = startPoint;
                 }
+            }else {
+                skipCount ++ ;
             }
-        }else {
-            skipCount ++ ;
         }
+        
         if (is->seek_req) {
             int64_t seek_target = is->seek_pos;
             int64_t seek_min    = is->seek_rel > 0 ? seek_target - is->seek_rel + 2: INT64_MIN;
