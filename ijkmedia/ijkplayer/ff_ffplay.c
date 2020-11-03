@@ -3058,24 +3058,6 @@ static int is_realtime(AVFormatContext *s)
     return 0;
 }
     
-/* 17media log */
-static void stat_bitrate(AVPacket* pkt,FFPlayer *ffp,AVFormatContext *ic) {
-    int interval = pkt->pts - ffp->log_last_pts;
-    ffp->log_duration += interval;
-    ffp->log_bytes_size += pkt->size;
-    ffp->log_last_pts = pkt->pts;
-    if (ffp->log_duration >= 1000) {
-        int realBitRate = (ffp->log_bytes_size * 8 * 1000) / ffp->log_duration;
-        //av_log(ffp, AV_LOG_DEBUG, "realBitRate:%d vdpfs:%.2f bytes:%d duration:%d \r\n",realBitRate,ffp->stat.vdps,ffp->log_bytes_size, ffp->log_duration);
-        //notify
-        ffp_notify_msg3(ffp, FFP_MSG_VIDEO_BITRATE, 0, realBitRate);
-        //reset
-        ffp->log_duration = 0;
-        ffp->log_bytes_size = 0;
-    }
-}
-    
-    
  static void drop_queue_until_pts(PacketQueue *q, int64_t drop_to_pts) {
      MyAVPacketList *pkt1 = NULL;
      int del_nb_packets = 0;
