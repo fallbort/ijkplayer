@@ -3274,11 +3274,12 @@ static int read_thread(void *arg)
             continue;
         }
 #endif
-        if (skipCount > 30) {
+        int startPoint = 200;
+        if (skipCount - startPoint > 30 && skipCount > startPoint) {
             if (is->max_cached_duration > 0) {
                 bool skipped = control_queue_duration(ffp, is);
                 if(skipped == true) {
-                    skipCount = 1;
+                    skipCount = startPoint;
                 }
             }
         }else {
